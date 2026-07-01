@@ -1,4 +1,4 @@
-const CACHE = "aerocheck-v1";
+const CACHE = "aerocheck-v2";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -17,6 +17,23 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+
+  // Navigations (the app shell/HTML) go network-first so a new deploy is
+  // picked up immediately instead of showing a stale cached page.
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(CACHE).then((c) => c.put(event.request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
