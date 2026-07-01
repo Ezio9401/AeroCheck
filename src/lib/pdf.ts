@@ -1,6 +1,6 @@
 import { loadImageSize } from "./image";
-import { CATALOG, SISTEMA_NOMBRE } from "./data";
-import { Entry, InspectionState, STATUS_DEFS, StatusKey } from "./types";
+import { getBase } from "./data";
+import { Entry, InspectionState, PhotoMap, STATUS_DEFS, StatusKey } from "./types";
 
 const STATUS_COLOR: Record<StatusKey, [number, number, number]> = {
   util: [46, 158, 91],
@@ -9,9 +9,11 @@ const STATUS_COLOR: Record<StatusKey, [number, number, number]> = {
   inutil: [214, 69, 69],
 };
 
-export async function downloadPdf(state: InspectionState) {
+export async function downloadPdf(state: InspectionState, photos: PhotoMap) {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
+
+  const base = getBase(state.base);
 
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -27,7 +29,7 @@ export async function downloadPdf(state: InspectionState) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.text(
-    `Base: ${state.base}     Intervención: ${state.intervencion}     Técnico ejecutor: ${state.tecnico}     Fecha: ${state.fecha}`,
+    `Base: ${base.nombre}     Intervención: ${state.intervencion}     Técnico ejecutor: ${state.tecnico}     Fecha: ${state.fecha}`,
     margin,
     40
   );
@@ -36,16 +38,17 @@ export async function downloadPdf(state: InspectionState) {
   doc.setTextColor(20, 20, 20);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.text(SISTEMA_NOMBRE, margin, y);
+  doc.text(base.sistemaNombre, margin, y);
   y += 4;
 
-  for (const group of CATALOG) {
+  for (const group of base.catalog) {
     const rows: (string | { content: string; styles: { textColor: [number, number, number] } })[][] = [];
-    const photoEntries: { entry: Entry; label: string }[] = [];
+    const photoEntries: { entry: Entry; photo: string; label: string }[] = [];
 
     for (const item of group.items) {
       for (let n = 1; n <= item.cant; n++) {
         const entry = state.entries.find((e) => e.elemId === item.id && e.unitNum === n);
+        const photo = entry ? photos[entry.entryId] : undefined;
         const estadoCell = entry?.status
           ? { content: STATUS_DEFS[entry.status].label, styles: { textColor: STATUS_COLOR[entry.status] } }
           : { content: "Sin revisar", styles: { textColor: [150, 150, 150] as [number, number, number] } };
@@ -59,10 +62,10 @@ export async function downloadPdf(state: InspectionState) {
           estadoCell,
           entry?.worktype ?? "",
           entry?.notes ?? "",
-          entry?.photo ? "Sí" : "",
+          photo ? "Sí" : "",
         ]);
-        if (entry?.photo) {
-          photoEntries.push({ entry, label: `${item.id} · Unidad ${n} · ${item.fab} ${item.ref}` });
+        if (entry && photo) {
+          photoEntries.push({ entry, photo, label: `${item.id} · Unidad ${n} · ${item.fab} ${item.ref}` });
         }
       }
     }
@@ -117,12 +120,11 @@ export async function downloadPdf(state: InspectionState) {
       const rowH = maxH + 22;
       let x = margin;
 
-      for (const { entry, label } of photoEntries) {
-        if (!entry.photo) continue;
+      for (const { photo, label } of photoEntries) {
         let w = maxW;
         let h = maxH;
         try {
-          const size = await loadImageSize(entry.photo);
+          const size = await loadImageSize(photo);
           if (size.width && size.height) {
             const ratio = size.width / size.height;
             if (ratio >= maxW / maxH) {
@@ -147,7 +149,7 @@ export async function downloadPdf(state: InspectionState) {
           x = margin;
         }
 
-        doc.addImage(entry.photo, "JPEG", x, y, w, h);
+        doc.addImage(photo, "JPEG", x, y, w, h);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7);
         doc.setTextColor(60, 60, 60);
@@ -163,6 +165,6 @@ export async function downloadPdf(state: InspectionState) {
     }
   }
 
-  const fname = `Inspeccion_AVA_${state.base}_${state.fecha}.pdf`.replace(/\s+/g, "_");
+  const fname = `Inspeccion_AVA_${base.nombre}_${state.fecha}.pdf`.replace(/\s+/g, "_");
   doc.save(fname);
 }

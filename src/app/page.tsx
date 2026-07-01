@@ -5,10 +5,11 @@ import AddBalizaSheet from "@/components/AddBalizaSheet";
 import CatalogScreen from "@/components/CatalogScreen";
 import SetupScreen from "@/components/SetupScreen";
 import Toast from "@/components/Toast";
-import { CATALOG } from "@/lib/data";
+import { getBase } from "@/lib/data";
 import { downloadCsv } from "@/lib/csv";
+import { clearPhotos, deletePhoto, getPhotosFor, savePhoto } from "@/lib/photoDb";
 import { clearState, loadState, saveState } from "@/lib/storage";
-import { CatalogItem, Entry, InspectionState, StatusKey, WorkType } from "@/lib/types";
+import { CatalogItem, Entry, InspectionState, PhotoMap, StatusKey, WorkType } from "@/lib/types";
 
 type View = "setup" | "catalog";
 
@@ -21,6 +22,7 @@ interface PickerState {
 export default function Home() {
   const [view, setView] = useState<View>("setup");
   const [state, setState] = useState<InspectionState | null>(null);
+  const [photos, setPhotos] = useState<PhotoMap>({});
   const [draft, setDraft] = useState<InspectionState | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [openSubsystems, setOpenSubsystems] = useState<Set<string>>(new Set());
@@ -56,12 +58,15 @@ export default function Home() {
       entries: [],
       lastModified: Date.now(),
     };
+    setPhotos({});
     persist(next);
     setView("catalog");
   };
 
-  const handleResumeDraft = () => {
+  const handleResumeDraft = async () => {
     if (!draft) return;
+    const loadedPhotos = await getPhotosFor(draft.entries.map((e) => e.entryId));
+    setPhotos(loadedPhotos);
     setState(draft);
     setView("catalog");
   };
@@ -71,10 +76,12 @@ export default function Home() {
     setDraft(state);
   };
 
-  const handleFinalize = () => {
+  const handleFinalize = async () => {
     if (!window.confirm("¿Finalizar la inspección? Se cerrará el registro actual.")) return;
+    if (state) await clearPhotos(state.entries.map((e) => e.entryId));
     clearState();
     setState(null);
+    setPhotos({});
     setDraft(null);
     setSearchQuery("");
     setOpenSubsystems(new Set());
@@ -126,7 +133,7 @@ export default function Home() {
     const elem = picker.selectedItem;
     const unitNum = picker.selectedUnit;
     const entryId = `${elem.id}#${unitNum}#${Date.now()}`;
-    const newEntry: Entry = { entryId, elemId: elem.id, unitNum, status: null, worktype: null, notes: "", photo: null };
+    const newEntry: Entry = { entryId, elemId: elem.id, unitNum, status: null, worktype: null, notes: "" };
     const next = { ...state, entries: [...state.entries, newEntry] };
     persist(next);
     setOpenSubsystems((prev) => new Set(prev).add(picker.sub));
@@ -135,10 +142,16 @@ export default function Home() {
     showToast(`Baliza añadida · Unidad ${unitNum}`);
   };
 
-  const handleRemoveEntry = (entryId: string) => {
+  const handleRemoveEntry = async (entryId: string) => {
     if (!state) return;
     const next = { ...state, entries: state.entries.filter((e) => e.entryId !== entryId) };
     persist(next);
+    await deletePhoto(entryId);
+    setPhotos((prev) => {
+      const copy = { ...prev };
+      delete copy[entryId];
+      return copy;
+    });
     setOpenEntryIds((prev) => {
       const copy = new Set(prev);
       copy.delete(entryId);
@@ -176,11 +189,20 @@ export default function Home() {
     setState({ ...state, entries: state.entries.map((e) => (e.entryId === entryId ? { ...e, notes } : e)) });
   };
 
-  const handleSetPhoto = (entryId: string, photo: string | null) => {
-    if (!state) return;
-    const next = { ...state, entries: state.entries.map((e) => (e.entryId === entryId ? { ...e, photo } : e)) };
-    persist(next);
-    showToast(photo ? "Foto añadida" : "Foto eliminada");
+  const handleSetPhoto = async (entryId: string, photo: string | null) => {
+    if (photo) {
+      await savePhoto(entryId, photo);
+      setPhotos((prev) => ({ ...prev, [entryId]: photo }));
+      showToast("Foto añadida");
+    } else {
+      await deletePhoto(entryId);
+      setPhotos((prev) => {
+        const copy = { ...prev };
+        delete copy[entryId];
+        return copy;
+      });
+      showToast("Foto eliminada");
+    }
   };
 
   const handleNotesBlur = () => {
@@ -190,13 +212,13 @@ export default function Home() {
 
   const handleExportCsv = () => {
     if (!state) return;
-    downloadCsv(state);
+    downloadCsv(state, photos);
   };
 
   const handleExportPdf = async () => {
     if (!state) return;
     const { downloadPdf } = await import("@/lib/pdf");
-    await downloadPdf(state);
+    await downloadPdf(state, photos);
     showToast("PDF generado correctamente");
   };
 
@@ -209,12 +231,15 @@ export default function Home() {
     );
   }
 
-  const pickerGroup = picker ? CATALOG.find((g) => g.sub === picker.sub) : null;
+  const catalog = getBase(state.base).catalog;
+  const pickerGroup = picker ? catalog.find((g) => g.sub === picker.sub) : null;
 
   return (
     <div id="app" onBlurCapture={handleNotesBlur}>
       <CatalogScreen
         state={state}
+        catalog={catalog}
+        photos={photos}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         openSubsystems={openSubsystems}

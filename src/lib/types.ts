@@ -19,6 +19,13 @@ export interface CatalogGroup {
   items: CatalogItem[];
 }
 
+export interface BaseDef {
+  id: string; // e.g. "BHELEME-II", used as InspectionState.base
+  nombre: string;
+  sistemaNombre: string;
+  catalog: CatalogGroup[];
+}
+
 export interface Entry {
   entryId: string;
   elemId: string;
@@ -26,8 +33,10 @@ export interface Entry {
   status: StatusKey | null;
   worktype: WorkType | null;
   notes: string;
-  photo: string | null;
 }
+
+/** entryId -> compressed photo data URL, stored in IndexedDB, not localStorage */
+export type PhotoMap = Record<string, string>;
 
 export interface InspectionState {
   id: string | null;

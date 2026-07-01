@@ -1,12 +1,13 @@
 "use client";
 
-import { CatalogGroup, Entry, StatusKey, WorkType } from "@/lib/types";
+import { CatalogGroup, Entry, PhotoMap, StatusKey, WorkType } from "@/lib/types";
 import { ChevIcon, PlusIcon } from "./icons";
 import EntryCard from "./EntryCard";
 
 interface SubsystemBlockProps {
   group: CatalogGroup;
   entries: Entry[];
+  photos: PhotoMap;
   open: boolean;
   onToggle: () => void;
   onAddBaliza: () => void;
@@ -22,6 +23,7 @@ interface SubsystemBlockProps {
 export default function SubsystemBlock({
   group,
   entries,
+  photos,
   open,
   onToggle,
   onAddBaliza,
@@ -95,6 +97,7 @@ export default function SubsystemBlock({
                     key={entry.entryId}
                     entry={entry}
                     item={item}
+                    photo={photos[entry.entryId] ?? null}
                     open={openEntryIds.has(entry.entryId)}
                     onToggle={() => onToggleEntry(entry.entryId)}
                     onRemove={() => onRemoveEntry(entry.entryId)}

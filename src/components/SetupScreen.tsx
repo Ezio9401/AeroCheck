@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BASES, INTERVENCIONES, totalUnits } from "@/lib/data";
+import { BASES, INTERVENCIONES, getBase, totalUnits } from "@/lib/data";
 import { InspectionState } from "@/lib/types";
 import { PlaneIcon } from "./icons";
 
@@ -16,7 +16,7 @@ function todayIso() {
 }
 
 export default function SetupScreen({ draft, onStart, onResumeDraft }: SetupScreenProps) {
-  const [base, setBase] = useState(BASES[0]);
+  const [base, setBase] = useState(BASES[0].id);
   const [intervencion, setIntervencion] = useState(INTERVENCIONES[0]);
   const [tecnico, setTecnico] = useState("");
   const [fecha, setFecha] = useState(todayIso());
@@ -31,7 +31,8 @@ export default function SetupScreen({ draft, onStart, onResumeDraft }: SetupScre
   };
 
   const draftDone = draft?.entries.length ?? 0;
-  const showResume = draft && draftDone > 0 && draftDone < totalUnits();
+  const draftTotal = draft ? totalUnits(getBase(draft.base).catalog) : 0;
+  const showResume = draft && draftDone > 0 && draftDone < draftTotal;
 
   return (
     <>
@@ -54,8 +55,8 @@ export default function SetupScreen({ draft, onStart, onResumeDraft }: SetupScre
             <label>Base</label>
             <select value={base} onChange={(e) => setBase(e.target.value)}>
               {BASES.map((b) => (
-                <option key={b} value={b}>
-                  {b}
+                <option key={b.id} value={b.id}>
+                  {b.nombre}
                 </option>
               ))}
             </select>
@@ -101,12 +102,12 @@ export default function SetupScreen({ draft, onStart, onResumeDraft }: SetupScre
                 <div>
                   <div style={{ fontWeight: 700, fontSize: "14.5px" }}>{draft.tecnico || "Sin técnico"}</div>
                   <div style={{ fontSize: "12.5px", color: "var(--muted)", marginTop: "2px" }}>
-                    {draft.intervencion} · {draft.fecha}
+                    {getBase(draft.base).nombre} · {draft.intervencion} · {draft.fecha}
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontWeight: 800, color: "var(--navy)" }}>
-                    {draftDone}/{totalUnits()}
+                    {draftDone}/{draftTotal}
                   </div>
                   <div style={{ fontSize: "11px", color: "var(--muted)" }}>unidades</div>
                 </div>

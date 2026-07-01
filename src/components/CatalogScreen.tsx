@@ -1,12 +1,14 @@
 "use client";
 
-import { CATALOG } from "@/lib/data";
-import { Entry, InspectionState, StatusKey, WorkType } from "@/lib/types";
+import { getBase } from "@/lib/data";
+import { CatalogGroup, Entry, InspectionState, PhotoMap, StatusKey, WorkType } from "@/lib/types";
 import { DownloadIcon, PlaneIcon, SearchIcon } from "./icons";
 import SubsystemBlock from "./SubsystemBlock";
 
 interface CatalogScreenProps {
   state: InspectionState;
+  catalog: CatalogGroup[];
+  photos: PhotoMap;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   openSubsystems: Set<string>;
@@ -27,6 +29,8 @@ interface CatalogScreenProps {
 
 export default function CatalogScreen({
   state,
+  catalog,
+  photos,
   searchQuery,
   onSearchChange,
   openSubsystems,
@@ -45,7 +49,7 @@ export default function CatalogScreen({
   onExportCsv,
 }: CatalogScreenProps) {
   const q = searchQuery.trim().toLowerCase();
-  const groups = CATALOG.map((group) => {
+  const groups = catalog.map((group) => {
     const items = group.items.filter((it) => {
       if (!q) return true;
       return (it.desc + it.fab + it.ref + it.id).toLowerCase().includes(q);
@@ -54,7 +58,7 @@ export default function CatalogScreen({
   }).filter(({ items }) => !(q && items.length === 0));
 
   const entriesByGroup = (sub: string): Entry[] => {
-    const ids = CATALOG.find((g) => g.sub === sub)?.items.map((i) => i.id) ?? [];
+    const ids = catalog.find((g) => g.sub === sub)?.items.map((i) => i.id) ?? [];
     return state.entries.filter((e) => ids.includes(e.elemId));
   };
 
@@ -67,7 +71,7 @@ export default function CatalogScreen({
               <PlaneIcon />
             </div>
             <div className="brand-text">
-              <div className="t1">{state.base}</div>
+              <div className="t1">{getBase(state.base).nombre}</div>
               <div className="t2">{state.intervencion}</div>
             </div>
           </div>
@@ -95,6 +99,7 @@ export default function CatalogScreen({
                 key={group.sub}
                 group={group}
                 entries={entriesByGroup(group.sub)}
+                photos={photos}
                 open={openSubsystems.has(group.sub)}
                 onToggle={() => onToggleSubsystem(group.sub)}
                 onAddBaliza={() => onAddBaliza(group.sub)}

@@ -8,6 +8,7 @@ import { ChevIcon, TrashIcon } from "./icons";
 interface EntryCardProps {
   entry: Entry;
   item: CatalogItem;
+  photo: string | null;
   open: boolean;
   onToggle: () => void;
   onRemove: () => void;
@@ -20,6 +21,7 @@ interface EntryCardProps {
 export default function EntryCard({
   entry,
   item,
+  photo,
   open,
   onToggle,
   onRemove,
@@ -132,10 +134,10 @@ export default function EntryCard({
                 className="hidden"
                 onChange={handleFile}
               />
-              {entry.photo ? (
+              {photo ? (
                 <div className="photo-preview">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={entry.photo} alt={`Foto de la unidad ${entry.unitNum}`} />
+                  <img src={photo} alt={`Foto de la unidad ${entry.unitNum}`} />
                   <button type="button" className="photo-remove" onClick={() => onSetPhoto(null)}>
                     <TrashIcon />
                   </button>
