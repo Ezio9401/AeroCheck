@@ -38,35 +38,43 @@ export async function downloadPdf(state: InspectionState, photos: PhotoMap) {
   doc.setTextColor(20, 20, 20);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.text(base.sistemaNombre, margin, y);
+  doc.text(`${base.sistemaNombre} · Balizas con incidencias`, margin, y);
   y += 4;
 
+  let anyProblems = false;
+
   for (const group of base.catalog) {
+    const itemsById = new Map(group.items.map((item) => [item.id, item]));
+    const problemEntries = state.entries
+      .filter((e) => itemsById.has(e.elemId) && e.status && e.status !== "util")
+      .sort((a, b) => (a.elemId === b.elemId ? a.unitNum - b.unitNum : a.elemId.localeCompare(b.elemId)));
+
+    if (problemEntries.length === 0) continue;
+    anyProblems = true;
+
     const rows: (string | { content: string; styles: { textColor: [number, number, number] } })[][] = [];
     const photoEntries: { entry: Entry; photo: string; label: string }[] = [];
 
-    for (const item of group.items) {
-      for (let n = 1; n <= item.cant; n++) {
-        const entry = state.entries.find((e) => e.elemId === item.id && e.unitNum === n);
-        const photo = entry ? photos[entry.entryId] : undefined;
-        const estadoCell = entry?.status
-          ? { content: STATUS_DEFS[entry.status].label, styles: { textColor: STATUS_COLOR[entry.status] } }
-          : { content: "Sin revisar", styles: { textColor: [150, 150, 150] as [number, number, number] } };
-        rows.push([
-          item.id,
-          item.desc,
-          item.fab,
-          item.ref,
-          item.noc,
-          `${n}/${item.cant}`,
-          estadoCell,
-          entry?.worktype ?? "",
-          entry?.notes ?? "",
-          photo ? "Sí" : "",
-        ]);
-        if (entry && photo) {
-          photoEntries.push({ entry, photo, label: `${item.id} · Unidad ${n} · ${item.fab} ${item.ref}` });
-        }
+    for (const entry of problemEntries) {
+      const item = itemsById.get(entry.elemId)!;
+      const photo = photos[entry.entryId];
+      const estadoCell = entry.status
+        ? { content: STATUS_DEFS[entry.status].label, styles: { textColor: STATUS_COLOR[entry.status] } }
+        : { content: "Sin revisar", styles: { textColor: [150, 150, 150] as [number, number, number] } };
+      rows.push([
+        item.id,
+        item.desc,
+        item.fab,
+        item.ref,
+        item.noc,
+        String(entry.unitNum),
+        estadoCell,
+        entry.worktype ?? "",
+        entry.notes ?? "",
+        photo ? "Sí" : "",
+      ]);
+      if (photo) {
+        photoEntries.push({ entry, photo, label: `${item.id} · Unidad ${entry.unitNum} · ${item.fab} ${item.ref}` });
       }
     }
 
@@ -163,6 +171,13 @@ export async function downloadPdf(state: InspectionState, photos: PhotoMap) {
         y = 40;
       }
     }
+  }
+
+  if (!anyProblems) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(60, 60, 60);
+    doc.text("No se detectaron balizas con incidencias en esta inspección.", margin, y + 12);
   }
 
   const fname = `Inspeccion_AVA_${base.nombre}_${state.fecha}.pdf`.replace(/\s+/g, "_");
