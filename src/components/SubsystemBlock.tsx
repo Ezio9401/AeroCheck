@@ -16,6 +16,7 @@ interface SubsystemBlockProps {
   onSetStatus: (entryId: string, status: StatusKey) => void;
   onSetWorktype: (entryId: string, worktype: WorkType) => void;
   onSetNotes: (entryId: string, notes: string) => void;
+  onSetPhoto: (entryId: string, photo: string | null) => void;
 }
 
 export default function SubsystemBlock({
@@ -30,6 +31,7 @@ export default function SubsystemBlock({
   onSetStatus,
   onSetWorktype,
   onSetNotes,
+  onSetPhoto,
 }: SubsystemBlockProps) {
   const total = group.items.reduce((a, i) => a + i.cant, 0);
   const done = entries.length;
@@ -99,6 +101,7 @@ export default function SubsystemBlock({
                     onSetStatus={(status) => onSetStatus(entry.entryId, status)}
                     onSetWorktype={(worktype) => onSetWorktype(entry.entryId, worktype)}
                     onSetNotes={(notes) => onSetNotes(entry.entryId, notes)}
+                    onSetPhoto={(photo) => onSetPhoto(entry.entryId, photo)}
                   />
                 );
               })

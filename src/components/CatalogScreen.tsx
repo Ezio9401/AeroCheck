@@ -18,6 +18,7 @@ interface CatalogScreenProps {
   onSetStatus: (entryId: string, status: StatusKey) => void;
   onSetWorktype: (entryId: string, worktype: WorkType) => void;
   onSetNotes: (entryId: string, notes: string) => void;
+  onSetPhoto: (entryId: string, photo: string | null) => void;
   onFinishLater: () => void;
   onFinalize: () => void;
   onExportPdf: () => void;
@@ -37,6 +38,7 @@ export default function CatalogScreen({
   onSetStatus,
   onSetWorktype,
   onSetNotes,
+  onSetPhoto,
   onFinishLater,
   onFinalize,
   onExportPdf,
@@ -102,6 +104,7 @@ export default function CatalogScreen({
                 onSetStatus={onSetStatus}
                 onSetWorktype={onSetWorktype}
                 onSetNotes={onSetNotes}
+                onSetPhoto={onSetPhoto}
               />
             ))
           )}

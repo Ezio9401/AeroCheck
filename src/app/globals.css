@@ -574,6 +574,58 @@ textarea:focus {
   color: #fff;
 }
 
+/* ---------- Photo capture ---------- */
+.photo-actions {
+  display: flex;
+  gap: 8px;
+}
+.photo-btn {
+  flex: 1;
+  padding: 11px 9px;
+  text-align: center;
+  border-radius: 10px;
+  border: 1.5px dashed var(--runway);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--runway);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.photo-btn:active {
+  background: #eef2f7;
+}
+.photo-preview {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1.5px solid var(--line);
+}
+.photo-preview img {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+}
+.photo-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(11, 31, 58, 0.75);
+  color: #fff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
 /* ---------- "Add baliza" picker sheet ---------- */
 .sheet-backdrop {
   position: fixed;

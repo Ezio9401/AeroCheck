@@ -126,7 +126,7 @@ export default function Home() {
     const elem = picker.selectedItem;
     const unitNum = picker.selectedUnit;
     const entryId = `${elem.id}#${unitNum}#${Date.now()}`;
-    const newEntry: Entry = { entryId, elemId: elem.id, unitNum, status: null, worktype: null, notes: "" };
+    const newEntry: Entry = { entryId, elemId: elem.id, unitNum, status: null, worktype: null, notes: "", photo: null };
     const next = { ...state, entries: [...state.entries, newEntry] };
     persist(next);
     setOpenSubsystems((prev) => new Set(prev).add(picker.sub));
@@ -176,6 +176,13 @@ export default function Home() {
     setState({ ...state, entries: state.entries.map((e) => (e.entryId === entryId ? { ...e, notes } : e)) });
   };
 
+  const handleSetPhoto = (entryId: string, photo: string | null) => {
+    if (!state) return;
+    const next = { ...state, entries: state.entries.map((e) => (e.entryId === entryId ? { ...e, photo } : e)) };
+    persist(next);
+    showToast(photo ? "Foto añadida" : "Foto eliminada");
+  };
+
   const handleNotesBlur = () => {
     if (!state) return;
     persist(state);
@@ -219,6 +226,7 @@ export default function Home() {
         onSetStatus={handleSetStatus}
         onSetWorktype={handleSetWorktype}
         onSetNotes={handleSetNotes}
+        onSetPhoto={handleSetPhoto}
         onFinishLater={handleFinishLater}
         onFinalize={handleFinalize}
         onExportPdf={handleExportPdf}

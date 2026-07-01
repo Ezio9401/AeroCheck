@@ -29,6 +29,7 @@ export function buildCsv(state: InspectionState): string {
     "Estado",
     "Tipo de trabajo",
     "Observaciones",
+    "Foto",
   ]);
 
   for (const group of CATALOG) {
@@ -47,6 +48,7 @@ export function buildCsv(state: InspectionState): string {
           entry?.status ? STATUS_DEFS[entry.status].label : "",
           entry?.worktype ?? "",
           entry?.notes ?? "",
+          entry?.photo ? "Sí" : "",
         ]);
       }
     }

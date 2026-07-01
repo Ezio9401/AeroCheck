@@ -26,6 +26,7 @@ export interface Entry {
   status: StatusKey | null;
   worktype: WorkType | null;
   notes: string;
+  photo: string | null;
 }
 
 export interface InspectionState {

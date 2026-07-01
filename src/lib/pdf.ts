@@ -1,5 +1,6 @@
+import { loadImageSize } from "./image";
 import { CATALOG, SISTEMA_NOMBRE } from "./data";
-import { InspectionState, STATUS_DEFS, StatusKey } from "./types";
+import { Entry, InspectionState, STATUS_DEFS, StatusKey } from "./types";
 
 const STATUS_COLOR: Record<StatusKey, [number, number, number]> = {
   util: [46, 158, 91],
@@ -14,6 +15,7 @@ export async function downloadPdf(state: InspectionState) {
 
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
   const margin = 28;
 
   doc.setFillColor(11, 31, 58);
@@ -39,6 +41,7 @@ export async function downloadPdf(state: InspectionState) {
 
   for (const group of CATALOG) {
     const rows: (string | { content: string; styles: { textColor: [number, number, number] } })[][] = [];
+    const photoEntries: { entry: Entry; label: string }[] = [];
 
     for (const item of group.items) {
       for (let n = 1; n <= item.cant; n++) {
@@ -56,7 +59,11 @@ export async function downloadPdf(state: InspectionState) {
           estadoCell,
           entry?.worktype ?? "",
           entry?.notes ?? "",
+          entry?.photo ? "Sí" : "",
         ]);
+        if (entry?.photo) {
+          photoEntries.push({ entry, label: `${item.id} · Unidad ${n} · ${item.fab} ${item.ref}` });
+        }
       }
     }
 
@@ -67,34 +74,92 @@ export async function downloadPdf(state: InspectionState) {
         [
           {
             content: `${group.sub} · ${group.subName}`,
-            colSpan: 9,
+            colSpan: 10,
             styles: { fillColor: [30, 58, 95], textColor: 255, fontStyle: "bold", halign: "left" },
           },
         ],
-        ["Nro", "Elemento", "Fabricante", "Referencia/P-N", "NOC", "Unidad", "Estado", "Trabajo", "Observaciones"],
+        ["Nro", "Elemento", "Fabricante", "Referencia/P-N", "NOC", "Unidad", "Estado", "Trabajo", "Observaciones", "Foto"],
       ],
       body: rows,
       styles: { fontSize: 7.5, cellPadding: 3, lineColor: [217, 211, 196], lineWidth: 0.5 },
       headStyles: { fillColor: [244, 241, 234], textColor: [11, 31, 58], fontStyle: "bold" },
       alternateRowStyles: { fillColor: [250, 249, 246] },
       columnStyles: {
-        0: { cellWidth: 28 },
-        1: { cellWidth: 110 },
-        2: { cellWidth: 50 },
-        3: { cellWidth: 80 },
-        4: { cellWidth: 65 },
-        5: { cellWidth: 34, halign: "center" },
-        6: { cellWidth: 52, halign: "center", fontStyle: "bold" },
-        7: { cellWidth: 45 },
+        0: { cellWidth: 26 },
+        1: { cellWidth: 100 },
+        2: { cellWidth: 46 },
+        3: { cellWidth: 72 },
+        4: { cellWidth: 60 },
+        5: { cellWidth: 32, halign: "center" },
+        6: { cellWidth: 48, halign: "center", fontStyle: "bold" },
+        7: { cellWidth: 42 },
         8: { cellWidth: "auto" },
+        9: { cellWidth: 24, halign: "center" },
       },
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     y = (doc as any).lastAutoTable.finalY + 16;
-    if (y > doc.internal.pageSize.getHeight() - 80) {
+    if (y > pageH - 80) {
       doc.addPage();
       y = 40;
+    }
+
+    if (photoEntries.length) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(11, 31, 58);
+      doc.text("Fotografías registradas", margin, y);
+      y += 12;
+
+      const maxW = 130;
+      const maxH = 95;
+      const rowH = maxH + 22;
+      let x = margin;
+
+      for (const { entry, label } of photoEntries) {
+        if (!entry.photo) continue;
+        let w = maxW;
+        let h = maxH;
+        try {
+          const size = await loadImageSize(entry.photo);
+          if (size.width && size.height) {
+            const ratio = size.width / size.height;
+            if (ratio >= maxW / maxH) {
+              w = maxW;
+              h = maxW / ratio;
+            } else {
+              h = maxH;
+              w = maxH * ratio;
+            }
+          }
+        } catch {
+          // keep default box size if the image fails to decode
+        }
+
+        if (x + maxW > pageW - margin) {
+          x = margin;
+          y += rowH;
+        }
+        if (y + rowH > pageH - 30) {
+          doc.addPage();
+          y = 40;
+          x = margin;
+        }
+
+        doc.addImage(entry.photo, "JPEG", x, y, w, h);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(60, 60, 60);
+        doc.text(label, x, y + maxH + 12, { maxWidth: maxW });
+        x += maxW + 12;
+      }
+
+      y += rowH + 10;
+      if (y > pageH - 80) {
+        doc.addPage();
+        y = 40;
+      }
     }
   }
 

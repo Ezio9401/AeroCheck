@@ -1,5 +1,7 @@
 "use client";
 
+import { useRef, useState } from "react";
+import { fileToCompressedDataUrl } from "@/lib/image";
 import { CatalogItem, Entry, STATUS_DEFS, StatusKey, WorkType, WORKTYPES } from "@/lib/types";
 import { ChevIcon, TrashIcon } from "./icons";
 
@@ -12,6 +14,7 @@ interface EntryCardProps {
   onSetStatus: (status: StatusKey) => void;
   onSetWorktype: (worktype: WorkType) => void;
   onSetNotes: (notes: string) => void;
+  onSetPhoto: (photo: string | null) => void;
 }
 
 export default function EntryCard({
@@ -23,10 +26,28 @@ export default function EntryCard({
   onSetStatus,
   onSetWorktype,
   onSetNotes,
+  onSetPhoto,
 }: EntryCardProps) {
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const [processingPhoto, setProcessingPhoto] = useState(false);
+
   const stCls = entry.status ? STATUS_DEFS[entry.status].cls : "";
   const chipCls = entry.status ? STATUS_DEFS[entry.status].cls : "st-pending";
   const chipLabel = entry.status ? STATUS_DEFS[entry.status].label : "Sin definir";
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setProcessingPhoto(true);
+    try {
+      const dataUrl = await fileToCompressedDataUrl(file);
+      onSetPhoto(dataUrl);
+    } finally {
+      setProcessingPhoto(false);
+    }
+  };
 
   return (
     <div className={`unit-card ${stCls}`}>
@@ -93,6 +114,52 @@ export default function EntryCard({
                   </div>
                 ))}
               </div>
+            </div>
+            <div className="field-row">
+              <label>Foto de la incidencia</label>
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleFile}
+              />
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFile}
+              />
+              {entry.photo ? (
+                <div className="photo-preview">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={entry.photo} alt={`Foto de la unidad ${entry.unitNum}`} />
+                  <button type="button" className="photo-remove" onClick={() => onSetPhoto(null)}>
+                    <TrashIcon />
+                  </button>
+                </div>
+              ) : (
+                <div className="photo-actions">
+                  <div
+                    className="photo-btn"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => cameraInputRef.current?.click()}
+                  >
+                    📷 {processingPhoto ? "Procesando..." : "Tomar foto"}
+                  </div>
+                  <div
+                    className="photo-btn"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => galleryInputRef.current?.click()}
+                  >
+                    🖼️ Subir imagen
+                  </div>
+                </div>
+              )}
             </div>
             <div className="field-row" style={{ marginBottom: 0 }}>
               <label>Descripción de las acciones / observaciones</label>
