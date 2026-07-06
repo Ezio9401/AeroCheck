@@ -67,9 +67,15 @@ export default function CatalogScreen({
       <header className="topbar">
         <div className="topbar-row">
           <div className="brand">
-            <div className="brand-mark">
+            <button
+              type="button"
+              className="brand-mark"
+              aria-label="Ir a la pantalla de inicio"
+              style={{ cursor: "pointer", border: "none", padding: 0 }}
+              onClick={onFinishLater}
+            >
               <PlaneIcon />
-            </div>
+            </button>
             <div className="brand-text">
               <div className="t1">{getBase(state.base).nombre}</div>
               <div className="t2">{state.intervencion}</div>
