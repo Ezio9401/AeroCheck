@@ -3,19 +3,20 @@
 import { useState } from "react";
 import { BASES, INTERVENCIONES, getBase, totalUnits } from "@/lib/data";
 import { InspectionState } from "@/lib/types";
-import { PlaneIcon } from "./icons";
+import { PlaneIcon, TrashIcon } from "./icons";
 
 interface SetupScreenProps {
-  draft: InspectionState | null;
+  drafts: InspectionState[];
   onStart: (meta: { base: string; intervencion: string; tecnico: string; fecha: string }) => void;
-  onResumeDraft: () => void;
+  onResumeDraft: (id: string) => void;
+  onDeleteDraft: (id: string) => void;
 }
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export default function SetupScreen({ draft, onStart, onResumeDraft }: SetupScreenProps) {
+export default function SetupScreen({ drafts, onStart, onResumeDraft, onDeleteDraft }: SetupScreenProps) {
   const [base, setBase] = useState(BASES[0].id);
   const [intervencion, setIntervencion] = useState(INTERVENCIONES[0]);
   const [tecnico, setTecnico] = useState("");
@@ -30,9 +31,7 @@ export default function SetupScreen({ draft, onStart, onResumeDraft }: SetupScre
     onStart({ base, intervencion, tecnico: tecnico.trim(), fecha });
   };
 
-  const draftDone = draft?.entries.length ?? 0;
-  const draftTotal = draft ? totalUnits(getBase(draft.base).catalog) : 0;
-  const showResume = draft && draftDone > 0 && draftDone < draftTotal;
+  const sortedDrafts = [...drafts].sort((a, b) => (b.lastModified ?? 0) - (a.lastModified ?? 0));
 
   return (
     <>
@@ -94,25 +93,50 @@ export default function SetupScreen({ draft, onStart, onResumeDraft }: SetupScre
           </button>
         </div>
 
-        {showResume && draft && (
+        {sortedDrafts.length > 0 && (
           <>
-            <div className="section-label">Inspección en curso</div>
-            <div className="card setup-card" style={{ cursor: "pointer" }} onClick={onResumeDraft}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: "14.5px" }}>{draft.tecnico || "Sin técnico"}</div>
-                  <div style={{ fontSize: "12.5px", color: "var(--muted)", marginTop: "2px" }}>
-                    {getBase(draft.base).nombre} · {draft.intervencion} · {draft.fecha}
+            <div className="section-label">Inspecciones pendientes</div>
+            {sortedDrafts.map((d) => {
+              const done = d.entries.length;
+              const total = totalUnits(getBase(d.base).catalog);
+              return (
+                <div
+                  key={d.id}
+                  className="card setup-card"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => d.id && onResumeDraft(d.id)}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: "14.5px" }}>{d.tecnico || "Sin técnico"}</div>
+                      <div style={{ fontSize: "12.5px", color: "var(--muted)", marginTop: "2px" }}>
+                        {getBase(d.base).nombre} · {d.intervencion} · {d.fecha}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontWeight: 800, color: "var(--navy)" }}>
+                          {done}/{total}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "var(--muted)" }}>unidades</div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        aria-label="Eliminar inspección"
+                        style={{ padding: "6px", lineHeight: 0, color: "var(--red)" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (d.id) onDeleteDraft(d.id);
+                        }}
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontWeight: 800, color: "var(--navy)" }}>
-                    {draftDone}/{draftTotal}
-                  </div>
-                  <div style={{ fontSize: "11px", color: "var(--muted)" }}>unidades</div>
-                </div>
-              </div>
-            </div>
+              );
+            })}
           </>
         )}
       </main>

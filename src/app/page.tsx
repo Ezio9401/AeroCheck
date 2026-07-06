@@ -8,7 +8,7 @@ import Toast from "@/components/Toast";
 import { getBase } from "@/lib/data";
 import { downloadCsv } from "@/lib/csv";
 import { clearPhotos, deletePhoto, getPhotosFor, savePhoto } from "@/lib/photoDb";
-import { clearState, loadState, saveState } from "@/lib/storage";
+import { deleteDraft, loadDrafts, saveDraft } from "@/lib/storage";
 import { CatalogItem, Entry, InspectionState, PhotoMap, StatusKey, WorkType } from "@/lib/types";
 
 type View = "setup" | "catalog";
@@ -23,7 +23,7 @@ export default function Home() {
   const [view, setView] = useState<View>("setup");
   const [state, setState] = useState<InspectionState | null>(null);
   const [photos, setPhotos] = useState<PhotoMap>({});
-  const [draft, setDraft] = useState<InspectionState | null>(null);
+  const [drafts, setDrafts] = useState<InspectionState[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [openSubsystems, setOpenSubsystems] = useState<Set<string>>(new Set());
   const [openEntryIds, setOpenEntryIds] = useState<Set<string>>(new Set());
@@ -32,9 +32,9 @@ export default function Home() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const saved = loadState();
+    const saved = loadDrafts();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration from localStorage on mount
-    if (saved) setDraft(saved);
+    setDrafts(saved);
     return () => {
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
@@ -47,8 +47,18 @@ export default function Home() {
   };
 
   const persist = (next: InspectionState) => {
-    setState(next);
-    saveState({ ...next, lastModified: Date.now() });
+    const withTime = { ...next, lastModified: Date.now() };
+    setState(withTime);
+    saveDraft(withTime);
+    setDrafts((prev) => {
+      const idx = prev.findIndex((d) => d.id === withTime.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = withTime;
+        return copy;
+      }
+      return [...prev, withTime];
+    });
   };
 
   const handleStart = (meta: { base: string; intervencion: string; tecnico: string; fecha: string }) => {
@@ -63,31 +73,47 @@ export default function Home() {
     setView("catalog");
   };
 
-  const handleResumeDraft = async () => {
-    if (!draft) return;
-    const loadedPhotos = await getPhotosFor(draft.entries.map((e) => e.entryId));
+  const handleResumeDraft = async (id: string) => {
+    const target = drafts.find((d) => d.id === id);
+    if (!target) return;
+    const loadedPhotos = await getPhotosFor(target.entries.map((e) => e.entryId));
     setPhotos(loadedPhotos);
-    setState(draft);
+    setState(target);
     setView("catalog");
   };
 
   const handleFinishLater = () => {
     setView("setup");
-    setDraft(state);
+    setState(null);
+    setPhotos({});
+    setSearchQuery("");
+    setOpenSubsystems(new Set());
+    setOpenEntryIds(new Set());
   };
 
   const handleFinalize = async () => {
     if (!window.confirm("¿Finalizar la inspección? Se cerrará el registro actual.")) return;
-    if (state) await clearPhotos(state.entries.map((e) => e.entryId));
-    clearState();
+    if (state?.id) {
+      await clearPhotos(state.entries.map((e) => e.entryId));
+      deleteDraft(state.id);
+      setDrafts((prev) => prev.filter((d) => d.id !== state.id));
+    }
     setState(null);
     setPhotos({});
-    setDraft(null);
     setSearchQuery("");
     setOpenSubsystems(new Set());
     setOpenEntryIds(new Set());
     setView("setup");
     showToast("Inspección finalizada");
+  };
+
+  const handleDeleteDraft = async (id: string) => {
+    if (!window.confirm("¿Eliminar esta inspección pendiente? Esta acción no se puede deshacer.")) return;
+    const target = drafts.find((d) => d.id === id);
+    if (target) await clearPhotos(target.entries.map((e) => e.entryId));
+    deleteDraft(id);
+    setDrafts((prev) => prev.filter((d) => d.id !== id));
+    showToast("Inspección eliminada");
   };
 
   const handleToggleSubsystem = (sub: string) => {
@@ -225,7 +251,12 @@ export default function Home() {
   if (view === "setup" || !state) {
     return (
       <div id="app">
-        <SetupScreen draft={draft} onStart={handleStart} onResumeDraft={handleResumeDraft} />
+        <SetupScreen
+          drafts={drafts}
+          onStart={handleStart}
+          onResumeDraft={handleResumeDraft}
+          onDeleteDraft={handleDeleteDraft}
+        />
         <Toast message={toastMsg} />
       </div>
     );
