@@ -1,4 +1,4 @@
-const CACHE = "aerocheck-v2";
+const CACHE = "aerocheck-v3";
 
 self.addEventListener("install", () => {
   self.skipWaiting();

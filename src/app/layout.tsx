@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AeroCheck — Inspección de ayudas visuales",
+  title: "MEGA - Aerocheck",
   description: "Checklist de campo para inspección de ayudas visuales aeronáuticas de plataforma.",
   manifest: "/manifest.webmanifest",
   icons: {
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "AeroCheck",
+    title: "MEGA - Aerocheck",
   },
 };
 

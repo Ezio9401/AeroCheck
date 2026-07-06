@@ -43,7 +43,7 @@ export default function SetupScreen({ draft, onStart, onResumeDraft }: SetupScre
               <PlaneIcon />
             </div>
             <div className="brand-text">
-              <div className="t2">MEGA · Inspección AVA</div>
+              <div className="t2">MEGA - Aerocheck</div>
             </div>
           </div>
         </div>

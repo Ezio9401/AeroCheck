@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "AeroCheck · Inspección AVA",
-    short_name: "AeroCheck",
+    name: "MEGA - Aerocheck",
+    short_name: "Aerocheck",
     description: "Checklist de campo para inspección de ayudas visuales aeronáuticas de plataforma.",
     start_url: "/",
     display: "standalone",
