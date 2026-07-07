@@ -1,11 +1,15 @@
 import { getBase } from "./data";
 import { InspectionState, PhotoMap, STATUS_DEFS } from "./types";
 
-function csvEscape(value: string): string {
-  if (/[",\n;]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
+export function csvEscape(value: string): string {
+  // Anti formula-injection: a cell starting with =, +, -, @ or a control
+  // char is treated as a formula by Excel (e.g. a note like =HYPERLINK(...)
+  // or =cmd|...). Prefix with an apostrophe so it's shown as literal text.
+  const s = /^[=+\-@\t\r]/.test(value) ? "'" + value : value;
+  if (/[",\n;]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
   }
-  return value;
+  return s;
 }
 
 export function buildCsv(state: InspectionState, photos: PhotoMap): string {

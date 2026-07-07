@@ -5,9 +5,11 @@ import AddBalizaSheet from "@/components/AddBalizaSheet";
 import CatalogScreen from "@/components/CatalogScreen";
 import SetupScreen from "@/components/SetupScreen";
 import Toast from "@/components/Toast";
-import { getBase } from "@/lib/data";
+import { findBase, getBase } from "@/lib/data";
 import { downloadCsv } from "@/lib/csv";
-import { clearPhotos, deletePhoto, getPhotosFor, savePhoto } from "@/lib/photoDb";
+import { exportInspection, parseBackup } from "@/lib/backup";
+import { dataUrlToBlob } from "@/lib/image";
+import { clearPhotos, deletePhoto, getPhotosFor, savePhoto, storageUsageRatio } from "@/lib/photoDb";
 import { deleteDraft, loadDrafts, saveDraft } from "@/lib/storage";
 import { CatalogItem, Entry, InspectionState, PhotoMap, StatusKey, WorkType } from "@/lib/types";
 
@@ -30,6 +32,8 @@ export default function Home() {
   const [picker, setPicker] = useState<PickerState | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stateRef = useRef<InspectionState | null>(null);
 
   useEffect(() => {
     const saved = loadDrafts();
@@ -37,6 +41,35 @@ export default function Home() {
     setDrafts(saved);
     return () => {
       if (toastTimer.current) clearTimeout(toastTimer.current);
+      if (notesTimer.current) clearTimeout(notesTimer.current);
+    };
+  }, []);
+
+  // Keep a live ref to the current inspection so background/flush handlers
+  // can persist the very latest state without stale closures.
+  useEffect(() => {
+    stateRef.current = state;
+  });
+
+  // Field safety net: if the app is sent to the background (or the page is
+  // being unloaded) while a note is mid-edit, flush it to localStorage now
+  // instead of waiting for the debounce or the textarea blur.
+  useEffect(() => {
+    const flush = () => {
+      if (notesTimer.current) {
+        clearTimeout(notesTimer.current);
+        notesTimer.current = null;
+      }
+      if (stateRef.current) saveDraft({ ...stateRef.current, lastModified: Date.now() });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flush);
     };
   }, []);
 
@@ -76,6 +109,12 @@ export default function Home() {
   const handleResumeDraft = async (id: string) => {
     const target = drafts.find((d) => d.id === id);
     if (!target) return;
+    // Refuse to open an orphaned draft rather than silently remapping it to a
+    // different base, which would corrupt the record.
+    if (!findBase(target.base)) {
+      showToast(`Esta inspección usa una base desconocida ("${target.base}") y no puede abrirse.`);
+      return;
+    }
     const loadedPhotos = await getPhotosFor(target.entries.map((e) => e.entryId));
     setPhotos(loadedPhotos);
     setState(target);
@@ -92,7 +131,17 @@ export default function Home() {
   };
 
   const handleFinalize = async () => {
-    if (!window.confirm("¿Finalizar la inspección? Se cerrará el registro actual.")) return;
+    if (
+      !window.confirm(
+        "¿Finalizar la inspección? Se eliminará del dispositivo (fotos incluidas) y solo quedarán los archivos que hayas exportado."
+      )
+    )
+      return;
+    // Archive-before-delete: offer a full self-contained backup so a finalized
+    // inspection can be restored later, not just its PDF/CSV.
+    if (state && window.confirm("¿Descargar una copia de seguridad (JSON) antes de cerrar?")) {
+      exportInspection(state, photos);
+    }
     if (state?.id) {
       await clearPhotos(state.entries.map((e) => e.entryId));
       deleteDraft(state.id);
@@ -212,16 +261,49 @@ export default function Home() {
 
   const handleSetNotes = (entryId: string, notes: string) => {
     if (!state) return;
-    setState({ ...state, entries: state.entries.map((e) => (e.entryId === entryId ? { ...e, notes } : e)) });
+    const next = { ...state, entries: state.entries.map((e) => (e.entryId === entryId ? { ...e, notes } : e)) };
+    setState(next);
+    // Debounced autosave: don't wait for blur, which may never fire if the
+    // phone backgrounds the app mid-typing (risk of losing the observation).
+    if (notesTimer.current) clearTimeout(notesTimer.current);
+    notesTimer.current = setTimeout(() => {
+      notesTimer.current = null;
+      if (stateRef.current) persist(stateRef.current);
+    }, 500);
   };
 
-  const handleSetPhoto = async (entryId: string, photo: string | null) => {
+  const handleSetPhoto = async (entryId: string, photo: Blob | null) => {
     if (photo) {
-      await savePhoto(entryId, photo);
+      try {
+        // Persist first, then reflect it in the UI. Never show an unsaved
+        // photo as saved: on a cheap phone IndexedDB can hit its quota and
+        // reject, and an optimistic update would hide that failure.
+        await savePhoto(entryId, photo);
+      } catch (err) {
+        const quota =
+          err instanceof DOMException &&
+          (err.name === "QuotaExceededError" || err.name === "NS_ERROR_DOM_QUOTA_REACHED");
+        showToast(
+          quota
+            ? "Sin espacio para guardar la foto. Libera espacio o elimina fotos."
+            : "No se pudo guardar la foto. Inténtalo de nuevo."
+        );
+        return;
+      }
       setPhotos((prev) => ({ ...prev, [entryId]: photo }));
-      showToast("Foto añadida");
+      const ratio = await storageUsageRatio();
+      if (ratio !== null && ratio >= 0.9) {
+        showToast("Foto guardada. Almacenamiento casi lleno: exporta y finaliza inspecciones para liberar espacio.");
+      } else {
+        showToast("Foto añadida");
+      }
     } else {
-      await deletePhoto(entryId);
+      try {
+        await deletePhoto(entryId);
+      } catch {
+        showToast("No se pudo eliminar la foto. Inténtalo de nuevo.");
+        return;
+      }
       setPhotos((prev) => {
         const copy = { ...prev };
         delete copy[entryId];
@@ -232,6 +314,10 @@ export default function Home() {
   };
 
   const handleNotesBlur = () => {
+    if (notesTimer.current) {
+      clearTimeout(notesTimer.current);
+      notesTimer.current = null;
+    }
     if (!state) return;
     persist(state);
   };
@@ -248,6 +334,49 @@ export default function Home() {
     showToast("PDF generado correctamente");
   };
 
+  const handleExportBackup = async () => {
+    if (!state) return;
+    await exportInspection(state, photos);
+    showToast("Copia de seguridad exportada");
+  };
+
+  const handleImportBackup = async (file: File) => {
+    let parsed: { inspection: InspectionState; photosBase64: Record<string, string> };
+    try {
+      parsed = parseBackup(await file.text());
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "No se pudo importar la inspección.");
+      return;
+    }
+    const { inspection, photosBase64 } = parsed;
+    // Persist the record first — the metadata + entries are the compliance
+    // data we must not lose; photos are restored best-effort afterwards.
+    saveDraft(inspection);
+    setDrafts((prev) => {
+      const idx = prev.findIndex((d) => d.id === inspection.id);
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = inspection;
+        return copy;
+      }
+      return [...prev, inspection];
+    });
+    let photoError = false;
+    for (const [entryId, dataUrl] of Object.entries(photosBase64)) {
+      try {
+        // Backups store photos as base64; convert back to a Blob for IndexedDB.
+        await savePhoto(entryId, await dataUrlToBlob(dataUrl));
+      } catch {
+        photoError = true;
+      }
+    }
+    showToast(
+      photoError
+        ? "Inspección importada (algunas fotos no se guardaron por falta de espacio)"
+        : "Inspección importada"
+    );
+  };
+
   if (view === "setup" || !state) {
     return (
       <div id="app">
@@ -256,6 +385,7 @@ export default function Home() {
           onStart={handleStart}
           onResumeDraft={handleResumeDraft}
           onDeleteDraft={handleDeleteDraft}
+          onImportBackup={handleImportBackup}
         />
         <Toast message={toastMsg} />
       </div>
@@ -287,6 +417,7 @@ export default function Home() {
         onFinalize={handleFinalize}
         onExportPdf={handleExportPdf}
         onExportCsv={handleExportCsv}
+        onExportBackup={handleExportBackup}
       />
       {picker && pickerGroup && (
         <AddBalizaSheet

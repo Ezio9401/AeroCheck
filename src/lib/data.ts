@@ -249,8 +249,23 @@ export const BASES: BaseDef[] = [
   },
 ];
 
+/** Honest lookup: returns undefined for an unknown id (e.g. an orphaned draft). */
+export function findBase(id: string): BaseDef | undefined {
+  return BASES.find((b) => b.id === id);
+}
+
+/**
+ * Returns the base for a known id. Throws on an unknown id instead of silently
+ * falling back to another base, which would corrupt the record if a base id is
+ * ever renamed. Only call this once the id is known valid (a started or resumed
+ * inspection); use findBase() where an unknown id is possible.
+ */
 export function getBase(id: string): BaseDef {
-  return BASES.find((b) => b.id === id) ?? BASES[0];
+  const base = findBase(id);
+  if (!base) {
+    throw new Error(`Base desconocida: "${id}". El borrador podría usar una base que ya no existe.`);
+  }
+  return base;
 }
 
 export function totalUnits(catalog: CatalogGroup[]): number {

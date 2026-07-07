@@ -35,8 +35,10 @@ export interface Entry {
   notes: string;
 }
 
-/** entryId -> compressed photo data URL, stored in IndexedDB, not localStorage */
-export type PhotoMap = Record<string, string>;
+/** entryId -> compressed photo Blob, stored in IndexedDB (not localStorage).
+ *  Kept as Blob references in memory; base64 is only produced on demand for
+ *  the PDF and the JSON backup. */
+export type PhotoMap = Record<string, Blob>;
 
 export interface InspectionState {
   id: string | null;

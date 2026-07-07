@@ -20,11 +20,12 @@ interface CatalogScreenProps {
   onSetStatus: (entryId: string, status: StatusKey) => void;
   onSetWorktype: (entryId: string, worktype: WorkType) => void;
   onSetNotes: (entryId: string, notes: string) => void;
-  onSetPhoto: (entryId: string, photo: string | null) => void;
+  onSetPhoto: (entryId: string, photo: Blob | null) => void;
   onFinishLater: () => void;
   onFinalize: () => void;
   onExportPdf: () => void;
   onExportCsv: () => void;
+  onExportBackup: () => void;
 }
 
 export default function CatalogScreen({
@@ -47,6 +48,7 @@ export default function CatalogScreen({
   onFinalize,
   onExportPdf,
   onExportCsv,
+  onExportBackup,
 }: CatalogScreenProps) {
   const q = searchQuery.trim().toLowerCase();
   const groups = catalog.map((group) => {
@@ -139,6 +141,9 @@ export default function CatalogScreen({
               <DownloadIcon /> Exportar PDF
             </button>
           </div>
+          <button type="button" className="btn btn-ghost" onClick={onExportBackup}>
+            Copia de seguridad (JSON)
+          </button>
         </div>
       </div>
     </>

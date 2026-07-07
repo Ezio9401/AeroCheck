@@ -1,6 +1,7 @@
 "use client";
 
 import { CatalogGroup, CatalogItem, Entry } from "@/lib/types";
+import { isItemFull, takenUnitNumbers, usedUnitCount } from "@/lib/report";
 
 interface AddBalizaSheetProps {
   group: CatalogGroup;
@@ -12,10 +13,6 @@ interface AddBalizaSheetProps {
   onBack: () => void;
   onCancel: () => void;
   onConfirm: () => void;
-}
-
-function entriesForElem(entries: Entry[], elemId: string) {
-  return entries.filter((e) => e.elemId === elemId);
 }
 
 export default function AddBalizaSheet({
@@ -45,8 +42,8 @@ export default function AddBalizaSheet({
               {group.sub} · {group.subName} — elige el tipo de elemento
             </div>
             {group.items.map((it) => {
-              const used = entriesForElem(entries, it.id).length;
-              const full = used >= it.cant;
+              const used = usedUnitCount(entries, it.id);
+              const full = isItemFull(it, entries);
               return (
                 <div
                   key={it.id}
@@ -81,8 +78,7 @@ export default function AddBalizaSheet({
             </div>
             <div className="unit-select-grid">
               {Array.from({ length: selectedItem.cant }, (_, i) => i + 1).map((n) => {
-                const used = new Set(entriesForElem(entries, selectedItem.id).map((e) => e.unitNum));
-                const taken = used.has(n);
+                const taken = takenUnitNumbers(entries, selectedItem.id).has(n);
                 const sel = selectedUnit === n;
                 return (
                   <div

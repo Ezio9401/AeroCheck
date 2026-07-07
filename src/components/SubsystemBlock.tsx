@@ -17,7 +17,7 @@ interface SubsystemBlockProps {
   onSetStatus: (entryId: string, status: StatusKey) => void;
   onSetWorktype: (entryId: string, worktype: WorkType) => void;
   onSetNotes: (entryId: string, notes: string) => void;
-  onSetPhoto: (entryId: string, photo: string | null) => void;
+  onSetPhoto: (entryId: string, photo: Blob | null) => void;
 }
 
 export default function SubsystemBlock({

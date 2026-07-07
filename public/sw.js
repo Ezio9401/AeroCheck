@@ -1,7 +1,26 @@
-const CACHE = "aerocheck-v5";
+const CACHE = "aerocheck-v9";
 
-self.addEventListener("install", () => {
-  self.skipWaiting();
+// Stable-URL app shell precached on install so the app can cold-boot offline
+// (an installed PWA opened with no connection still gets HTML, manifest and
+// icons). Hashed _next/static chunks have no author-time URL, so they are
+// covered by the runtime cache-first handler on first load instead.
+const PRECACHE_URLS = [
+  "/",
+  "/manifest.webmanifest",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/icons/icon-maskable-512.png",
+  "/icons/apple-touch-icon.png",
+];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      // allSettled so a single 404 doesn't abort the whole precache.
+      .then((cache) => Promise.allSettled(PRECACHE_URLS.map((u) => cache.add(u))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", (event) => {
@@ -19,7 +38,9 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   // Navigations (the app shell/HTML) go network-first so a new deploy is
-  // picked up immediately instead of showing a stale cached page.
+  // picked up immediately instead of showing a stale cached page. Offline,
+  // fall back to the exact cached page and finally to the precached "/" shell
+  // (this is a SPA, so "/" can render any view).
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request)
@@ -30,7 +51,7 @@ self.addEventListener("fetch", (event) => {
           }
           return res;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request).then((m) => m || caches.match("/")))
     );
     return;
   }

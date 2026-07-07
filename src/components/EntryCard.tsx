@@ -1,21 +1,21 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { fileToCompressedDataUrl } from "@/lib/image";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { fileToCompressedBlob } from "@/lib/image";
 import { CatalogItem, Entry, STATUS_DEFS, StatusKey, WorkType, WORKTYPES } from "@/lib/types";
 import { ChevIcon, TrashIcon } from "./icons";
 
 interface EntryCardProps {
   entry: Entry;
   item: CatalogItem;
-  photo: string | null;
+  photo: Blob | null;
   open: boolean;
   onToggle: () => void;
   onRemove: () => void;
   onSetStatus: (status: StatusKey) => void;
   onSetWorktype: (worktype: WorkType) => void;
   onSetNotes: (notes: string) => void;
-  onSetPhoto: (photo: string | null) => void;
+  onSetPhoto: (photo: Blob | null) => void;
 }
 
 export default function EntryCard({
@@ -34,6 +34,16 @@ export default function EntryCard({
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const [processingPhoto, setProcessingPhoto] = useState(false);
 
+  // Build the thumbnail object URL from the Blob (image bytes stay in the
+  // browser's blob store, never as base64 in the JS heap) and revoke it when
+  // the photo changes or the card unmounts so object URLs don't leak.
+  const previewUrl = useMemo(() => (photo ? URL.createObjectURL(photo) : null), [photo]);
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
   const stCls = entry.status ? STATUS_DEFS[entry.status].cls : "";
   const chipCls = entry.status ? STATUS_DEFS[entry.status].cls : "st-pending";
   const chipLabel = entry.status ? STATUS_DEFS[entry.status].label : "Sin definir";
@@ -44,8 +54,8 @@ export default function EntryCard({
     if (!file) return;
     setProcessingPhoto(true);
     try {
-      const dataUrl = await fileToCompressedDataUrl(file);
-      onSetPhoto(dataUrl);
+      const blob = await fileToCompressedBlob(file);
+      onSetPhoto(blob);
     } finally {
       setProcessingPhoto(false);
     }
@@ -134,10 +144,10 @@ export default function EntryCard({
                 className="hidden"
                 onChange={handleFile}
               />
-              {photo ? (
+              {photo && previewUrl ? (
                 <div className="photo-preview">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo} alt={`Foto de la unidad ${entry.unitNum}`} />
+                  <img src={previewUrl} alt={`Foto de la unidad ${entry.unitNum}`} />
                   <button type="button" className="photo-remove" onClick={() => onSetPhoto(null)}>
                     <TrashIcon />
                   </button>

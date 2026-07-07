@@ -1,6 +1,12 @@
-import { loadImageSize } from "./image";
+import type { Table } from "jspdf-autotable";
+import { blobToDataUrl, loadImageSize } from "./image";
 import { getBase } from "./data";
+import { problemEntriesForGroup } from "./report";
 import { Entry, InspectionState, PhotoMap, STATUS_DEFS, StatusKey } from "./types";
+
+// jspdf-autotable attaches the last drawn table to the doc but doesn't augment
+// jsPDF's type, so expose it through the exported Table type instead of `any`.
+type DocWithAutoTable = { lastAutoTable: Table };
 
 const STATUS_COLOR: Record<StatusKey, [number, number, number]> = {
   util: [46, 158, 91],
@@ -45,19 +51,17 @@ export async function downloadPdf(state: InspectionState, photos: PhotoMap) {
 
   for (const group of base.catalog) {
     const itemsById = new Map(group.items.map((item) => [item.id, item]));
-    const problemEntries = state.entries
-      .filter((e) => itemsById.has(e.elemId) && e.status && e.status !== "util")
-      .sort((a, b) => (a.elemId === b.elemId ? a.unitNum - b.unitNum : a.elemId.localeCompare(b.elemId)));
+    const problemEntries = problemEntriesForGroup(group, state.entries);
 
     if (problemEntries.length === 0) continue;
     anyProblems = true;
 
     const rows: (string | { content: string; styles: { textColor: [number, number, number] } })[][] = [];
-    const photoEntries: { entry: Entry; photo: string; label: string }[] = [];
+    const photoEntries: { entry: Entry; blob: Blob; label: string }[] = [];
 
     for (const entry of problemEntries) {
       const item = itemsById.get(entry.elemId)!;
-      const photo = photos[entry.entryId];
+      const blob = photos[entry.entryId];
       const estadoCell = entry.status
         ? { content: STATUS_DEFS[entry.status].label, styles: { textColor: STATUS_COLOR[entry.status] } }
         : { content: "Sin revisar", styles: { textColor: [150, 150, 150] as [number, number, number] } };
@@ -71,10 +75,10 @@ export async function downloadPdf(state: InspectionState, photos: PhotoMap) {
         estadoCell,
         entry.worktype ?? "",
         entry.notes ?? "",
-        photo ? "Sí" : "",
+        blob ? "Sí" : "",
       ]);
-      if (photo) {
-        photoEntries.push({ entry, photo, label: `${item.id} · Unidad ${entry.unitNum} · ${item.fab} ${item.ref}` });
+      if (blob) {
+        photoEntries.push({ entry, blob, label: `${item.id} · Unidad ${entry.unitNum} · ${item.fab} ${item.ref}` });
       }
     }
 
@@ -109,8 +113,7 @@ export async function downloadPdf(state: InspectionState, photos: PhotoMap) {
       },
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    y = (doc as any).lastAutoTable.finalY + 16;
+    y = ((doc as unknown as DocWithAutoTable).lastAutoTable.finalY ?? y) + 16;
     if (y > pageH - 80) {
       doc.addPage();
       y = 40;
@@ -128,7 +131,9 @@ export async function downloadPdf(state: InspectionState, photos: PhotoMap) {
       const rowH = maxH + 22;
       let x = margin;
 
-      for (const { photo, label } of photoEntries) {
+      for (const { blob, label } of photoEntries) {
+        // Decode from the Blob only here, at export time, one at a time.
+        const photo = await blobToDataUrl(blob);
         let w = maxW;
         let h = maxH;
         try {

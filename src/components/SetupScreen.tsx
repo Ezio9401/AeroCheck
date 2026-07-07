@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { BASES, INTERVENCIONES, getBase, totalUnits } from "@/lib/data";
+import { useRef, useState } from "react";
+import { BASES, INTERVENCIONES, findBase, totalUnits } from "@/lib/data";
 import { InspectionState } from "@/lib/types";
 import { PlaneIcon, TrashIcon } from "./icons";
 
@@ -10,18 +10,26 @@ interface SetupScreenProps {
   onStart: (meta: { base: string; intervencion: string; tecnico: string; fecha: string }) => void;
   onResumeDraft: (id: string) => void;
   onDeleteDraft: (id: string) => void;
+  onImportBackup: (file: File) => void;
 }
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export default function SetupScreen({ drafts, onStart, onResumeDraft, onDeleteDraft }: SetupScreenProps) {
+export default function SetupScreen({ drafts, onStart, onResumeDraft, onDeleteDraft, onImportBackup }: SetupScreenProps) {
   const [base, setBase] = useState(BASES[0].id);
   const [intervencion, setIntervencion] = useState(INTERVENCIONES[0]);
   const [tecnico, setTecnico] = useState("");
   const [fecha, setFecha] = useState(todayIso());
   const [error, setError] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) onImportBackup(file);
+  };
 
   const handleStart = () => {
     if (!tecnico.trim()) {
@@ -97,8 +105,9 @@ export default function SetupScreen({ drafts, onStart, onResumeDraft, onDeleteDr
           <>
             <div className="section-label">Inspecciones pendientes</div>
             {sortedDrafts.map((d) => {
+              const dBase = findBase(d.base);
               const done = d.entries.length;
-              const total = totalUnits(getBase(d.base).catalog);
+              const total = dBase ? totalUnits(dBase.catalog) : 0;
               return (
                 <div
                   key={d.id}
@@ -110,8 +119,13 @@ export default function SetupScreen({ drafts, onStart, onResumeDraft, onDeleteDr
                     <div>
                       <div style={{ fontWeight: 700, fontSize: "14.5px" }}>{d.tecnico || "Sin técnico"}</div>
                       <div style={{ fontSize: "12.5px", color: "var(--muted)", marginTop: "2px" }}>
-                        {getBase(d.base).nombre} · {d.intervencion} · {d.fecha}
+                        {dBase ? dBase.nombre : `Base desconocida (${d.base})`} · {d.intervencion} · {d.fecha}
                       </div>
+                      {!dBase && (
+                        <div style={{ fontSize: "11.5px", color: "var(--red)", marginTop: "3px", fontWeight: 600 }}>
+                          Base no reconocida — no se puede abrir
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <div style={{ textAlign: "right" }}>
@@ -139,6 +153,23 @@ export default function SetupScreen({ drafts, onStart, onResumeDraft, onDeleteDr
             })}
           </>
         )}
+
+        <div className="section-label">Copia de seguridad</div>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={handleImportFile}
+        />
+        <button
+          type="button"
+          className="btn btn-ghost"
+          style={{ width: "100%" }}
+          onClick={() => importInputRef.current?.click()}
+        >
+          Importar inspección (JSON)
+        </button>
       </main>
     </>
   );
