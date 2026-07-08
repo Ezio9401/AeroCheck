@@ -12,7 +12,26 @@ export function csvEscape(value: string): string {
   return s;
 }
 
-export function buildCsv(state: InspectionState, photos: PhotoMap): string {
+export const REPORT_COLUMNS = [
+  "Subsistema",
+  "Nro",
+  "Elemento",
+  "Fabricante",
+  "Referencia/P-N",
+  "NOC",
+  "Unidad",
+  "Estado",
+  "Tipo de trabajo",
+  "Observaciones",
+  "Foto",
+] as const;
+
+/**
+ * Tabular model of an inspection shared by the CSV and XLSX exports: metadata
+ * rows, a blank row, the header row and one row per added unit. Returned as a
+ * plain array-of-arrays so each exporter formats it as it needs.
+ */
+export function buildReportRows(state: InspectionState, photos: PhotoMap): string[][] {
   const rows: string[][] = [];
 
   rows.push(["Base", getBase(state.base).nombre]);
@@ -21,19 +40,7 @@ export function buildCsv(state: InspectionState, photos: PhotoMap): string {
   rows.push(["Fecha", state.fecha]);
   rows.push([]);
 
-  rows.push([
-    "Subsistema",
-    "Nro",
-    "Elemento",
-    "Fabricante",
-    "Referencia/P-N",
-    "NOC",
-    "Unidad",
-    "Estado",
-    "Tipo de trabajo",
-    "Observaciones",
-    "Foto",
-  ]);
+  rows.push([...REPORT_COLUMNS]);
 
   const catalog = getBase(state.base).catalog;
 
@@ -59,7 +66,13 @@ export function buildCsv(state: InspectionState, photos: PhotoMap): string {
     }
   }
 
-  return rows.map((row) => row.map(csvEscape).join(";")).join("\n");
+  return rows;
+}
+
+export function buildCsv(state: InspectionState, photos: PhotoMap): string {
+  return buildReportRows(state, photos)
+    .map((row) => row.map(csvEscape).join(";"))
+    .join("\n");
 }
 
 export function downloadCsv(state: InspectionState, photos: PhotoMap) {

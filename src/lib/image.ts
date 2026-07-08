@@ -1,6 +1,6 @@
 /** Compress an image file to a JPEG Blob (kept as a Blob, not a base64 data
  *  URL, so it is ~33% smaller and never sits in the JS heap as a big string). */
-export function fileToCompressedBlob(file: File, maxDim = 1000, quality = 0.72): Promise<Blob> {
+export function fileToCompressedBlob(file: File, maxDim = 2000, quality = 0.85): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error);

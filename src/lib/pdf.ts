@@ -1,3 +1,4 @@
+import type { jsPDF as JsPDF } from "jspdf";
 import type { Table } from "jspdf-autotable";
 import { blobToDataUrl, loadImageSize } from "./image";
 import { getBase } from "./data";
@@ -15,7 +16,11 @@ const STATUS_COLOR: Record<StatusKey, [number, number, number]> = {
   inutil: [214, 69, 69],
 };
 
-export async function downloadPdf(state: InspectionState, photos: PhotoMap) {
+/**
+ * Builds the inspection PDF and returns the jsPDF document (without saving it).
+ * jspdf is still loaded via dynamic import so the PWA keeps caching it as before.
+ */
+export async function buildPdf(state: InspectionState, photos: PhotoMap): Promise<JsPDF> {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
@@ -185,6 +190,18 @@ export async function downloadPdf(state: InspectionState, photos: PhotoMap) {
     doc.text("No se detectaron balizas con incidencias en esta inspección.", margin, y + 12);
   }
 
-  const fname = `Inspeccion_AVA_${base.nombre}_${state.fecha}.pdf`.replace(/\s+/g, "_");
+  return doc;
+}
+
+/** Builds the PDF and returns its raw bytes (for bundling into a ZIP, etc.). */
+export async function buildPdfBytes(state: InspectionState, photos: PhotoMap): Promise<Uint8Array> {
+  const doc = await buildPdf(state, photos);
+  return new Uint8Array(doc.output("arraybuffer"));
+}
+
+/** Builds the PDF and saves it with the same filename and behaviour as before. */
+export async function downloadPdf(state: InspectionState, photos: PhotoMap) {
+  const doc = await buildPdf(state, photos);
+  const fname = `Inspeccion_AVA_${getBase(state.base).nombre}_${state.fecha}.pdf`.replace(/\s+/g, "_");
   doc.save(fname);
 }

@@ -97,6 +97,25 @@ export async function storageUsageRatio(): Promise<number | null> {
   }
 }
 
+/**
+ * Storage estimate in megabytes plus a nearLimit flag (usage over 80%). Falls
+ * back to zeros / nearLimit=false when the Storage API isn't available.
+ */
+export async function checkStorageQuota(): Promise<{ usedMB: number; quotaMB: number; nearLimit: boolean }> {
+  if (typeof navigator === "undefined" || !navigator.storage?.estimate) {
+    return { usedMB: 0, quotaMB: 0, nearLimit: false };
+  }
+  try {
+    const { usage = 0, quota = 0 } = await navigator.storage.estimate();
+    const usedMB = usage / (1024 * 1024);
+    const quotaMB = quota / (1024 * 1024);
+    const nearLimit = quota > 0 && usage / quota > 0.8;
+    return { usedMB, quotaMB, nearLimit };
+  } catch {
+    return { usedMB: 0, quotaMB: 0, nearLimit: false };
+  }
+}
+
 export async function clearPhotos(entryIds: string[]): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {

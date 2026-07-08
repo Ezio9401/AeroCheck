@@ -7,9 +7,12 @@ import SetupScreen from "@/components/SetupScreen";
 import Toast from "@/components/Toast";
 import { findBase, getBase } from "@/lib/data";
 import { downloadCsv } from "@/lib/csv";
+import { buildXlsxBytes } from "@/lib/xlsx";
+import { buildPdfBytes } from "@/lib/pdf";
+import { buildArchiveZip } from "@/lib/archive";
 import { exportInspection, parseBackup } from "@/lib/backup";
 import { dataUrlToBlob } from "@/lib/image";
-import { clearPhotos, deletePhoto, getPhotosFor, savePhoto, storageUsageRatio } from "@/lib/photoDb";
+import { checkStorageQuota, clearPhotos, deletePhoto, getPhotosFor, savePhoto } from "@/lib/photoDb";
 import { deleteDraft, loadDrafts, saveDraft } from "@/lib/storage";
 import { CatalogItem, Entry, InspectionState, PhotoMap, StatusKey, WorkType } from "@/lib/types";
 
@@ -131,18 +134,40 @@ export default function Home() {
   };
 
   const handleFinalize = async () => {
-    if (
-      !window.confirm(
-        "¿Finalizar la inspección? Se eliminará del dispositivo (fotos incluidas) y solo quedarán los archivos que hayas exportado."
-      )
-    )
+    if (!state) return;
+    if (!window.confirm("¿Finalizar? Se generará el ZIP con PDF, Excel y fotos.")) return;
+
+    const baseName = getBase(state.base).nombre.replace(/\s+/g, "_");
+    const fileName = `Inspeccion_${baseName}_${state.fecha}.zip`;
+
+    // Build the archive first and only delete anything if it succeeds. If any
+    // step throws, the inspection is left untouched on the device.
+    try {
+      const pdf = await buildPdfBytes(state, photos);
+      const xlsx = buildXlsxBytes(state, photos);
+      const blob = await buildArchiveZip(state, photos, pdf, xlsx);
+      const file = new File([blob], fileName, { type: "application/zip" });
+      const title = `Inspección ${getBase(state.base).nombre} · ${state.fecha}`;
+
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      showToast("No se pudo generar el archivo. La inspección NO se ha borrado.");
       return;
-    // Archive-before-delete: offer a full self-contained backup so a finalized
-    // inspection can be restored later, not just its PDF/CSV.
-    if (state && window.confirm("¿Descargar una copia de seguridad (JSON) antes de cerrar?")) {
-      exportInspection(state, photos);
     }
-    if (state?.id) {
+
+    // Archive succeeded — now it's safe to remove the inspection from the device.
+    if (state.id) {
       await clearPhotos(state.entries.map((e) => e.entryId));
       deleteDraft(state.id);
       setDrafts((prev) => prev.filter((d) => d.id !== state.id));
@@ -153,7 +178,7 @@ export default function Home() {
     setOpenSubsystems(new Set());
     setOpenEntryIds(new Set());
     setView("setup");
-    showToast("Inspección finalizada");
+    showToast("Inspección finalizada y archivada");
   };
 
   const handleDeleteDraft = async (id: string) => {
@@ -290,10 +315,11 @@ export default function Home() {
         );
         return;
       }
+      // Only reflect the photo in the UI after a confirmed write.
       setPhotos((prev) => ({ ...prev, [entryId]: photo }));
-      const ratio = await storageUsageRatio();
-      if (ratio !== null && ratio >= 0.9) {
-        showToast("Foto guardada. Almacenamiento casi lleno: exporta y finaliza inspecciones para liberar espacio.");
+      const { nearLimit } = await checkStorageQuota();
+      if (nearLimit) {
+        showToast("Almacenamiento casi lleno, finaliza y descarga la inspección pronto");
       } else {
         showToast("Foto añadida");
       }
