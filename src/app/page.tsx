@@ -139,34 +139,54 @@ export default function Home() {
 
     const baseName = getBase(state.base).nombre.replace(/\s+/g, "_");
     const fileName = `Inspeccion_${baseName}_${state.fecha}.zip`;
+    const title = `Inspección ${getBase(state.base).nombre} · ${state.fecha}`;
 
-    // Build the archive first and only delete anything if it succeeds. If any
-    // step throws, the inspection is left untouched on the device.
+    // 1) Build the archive. A failure here must NOT delete anything.
+    let blob: Blob;
+    let file: File;
     try {
       const pdf = await buildPdfBytes(state, photos);
       const xlsx = buildXlsxBytes(state, photos);
-      const blob = await buildArchiveZip(state, photos, pdf, xlsx);
-      const file = new File([blob], fileName, { type: "application/zip" });
-      const title = `Inspección ${getBase(state.base).nombre} · ${state.fecha}`;
-
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title });
-      } else {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
+      blob = await buildArchiveZip(state, photos, pdf, xlsx);
+      file = new File([blob], fileName, { type: "application/zip" });
     } catch {
       showToast("No se pudo generar el archivo. La inspección NO se ha borrado.");
       return;
     }
 
-    // Archive succeeded — now it's safe to remove the inspection from the device.
+    // 2) Deliver it. Downloading via <a download> always works; sharing is
+    //    nicer on mobile but needs a fresh user activation, which the long
+    //    build above may have consumed. So: try to share, and if it fails for
+    //    any reason other than the user cancelling, fall back to a download so
+    //    the phone still ends up with the file.
+    const downloadZip = () => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title });
+      } catch (err) {
+        // User dismissed the share sheet: keep the inspection, don't download.
+        if (err instanceof DOMException && err.name === "AbortError") {
+          showToast("Compartir cancelado. La inspección NO se ha borrado.");
+          return;
+        }
+        // Share not allowed (e.g. lost activation on mobile): download instead.
+        downloadZip();
+      }
+    } else {
+      downloadZip();
+    }
+
+    // Archive delivered — now it's safe to remove the inspection from the device.
     if (state.id) {
       await clearPhotos(state.entries.map((e) => e.entryId));
       deleteDraft(state.id);
